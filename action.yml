@@ -1,0 +1,65 @@
+name: "Pushover Notification"
+description: "Send a push notification via Pushover API"
+
+inputs:
+  user_key:
+    description: "Pushover user key"
+    required: true
+  api_token:
+    description: "Pushover application API token"
+    required: true
+  title:
+    description: "Notification title"
+    required: false
+    default: "Deployment"
+  message:
+    description: "Notification message"
+    required: true
+  priority:
+    description: "Message priority (-2 to 2)"
+    required: false
+    default: "0"
+  url:
+    description: "Optional URL to include"
+    required: false
+    default: ""
+  url_title:
+    description: "Title for the URL"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+  - name: Send Pushover notification
+    shell: bash
+    run: |
+      CURL_ARGS=(
+        --data-urlencode "token=${{ inputs.api_token }}"
+        --data-urlencode "user=${{ inputs.user_key }}"
+        --data-urlencode "title=${{ inputs.title }}"
+        --data-urlencode "message=${{ inputs.message }}"
+        --data-urlencode "priority=${{ inputs.priority }}"
+      )
+
+      if [ -n "${{ inputs.url }}" ]; then
+        CURL_ARGS+=(--data-urlencode "url=${{ inputs.url }}")
+      fi
+
+      if [ -n "${{ inputs.url_title }}" ]; then
+        CURL_ARGS+=(--data-urlencode "url_title=${{ inputs.url_title }}")
+      fi
+
+      response=$(curl -s -w "\n%{http_code}" -X POST \
+        "${CURL_ARGS[@]}" \
+        https://api.pushover.net/1/messages.json)
+
+      http_code=$(echo "$response" | tail -n1)
+      body=$(echo "$response" | sed '$d')
+
+      if [ "$http_code" -ne 200 ]; then
+        echo "::error::Pushover notification failed with HTTP $http_code: $body"
+        exit 1
+      fi
+
+      echo "Pushover notification sent successfully"
